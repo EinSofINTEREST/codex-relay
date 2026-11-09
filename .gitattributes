@@ -1,0 +1,2 @@
+# shebang 이 있는 실행 파일은 Windows 체크아웃에서도 LF 여야 한다
+bin/* text eol=lf

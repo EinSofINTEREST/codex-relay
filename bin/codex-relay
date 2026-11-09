@@ -1,0 +1,17 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
+"""Codex app-server 중계기. 사용법은 `codex-relay` (인자 없이) 를 실행해 본다. 구현은 codex_relay/."""
+
+import os
+import sys
+
+# 데몬은 -I 로 다시 뜨고, -I 는 스크립트 디렉토리를 sys.path 에 넣지 않는다 — 패키지 위치 (저장소 루트) 를 직접 넣는다
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+sys.dont_write_bytecode = True  # 저장소에 __pycache__ 를 남기지 않는다
+
+from codex_relay.cli import main
+
+sys.exit(main(sys.argv[1:]))
