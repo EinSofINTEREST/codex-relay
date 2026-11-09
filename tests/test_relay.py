@@ -83,7 +83,8 @@ def _wait_dead(pid: int, seconds: float = 10) -> bool:
 
 class RelayTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.tmp = Path(tempfile.mkdtemp(prefix="codex-relay-test-"))
+        # CLI 는 경로를 resolve 한다 — Windows 러너의 8.3 짧은 TEMP (RUNNER~1) 와 비교가 어긋나지 않게 맞춘다
+        self.tmp = Path(tempfile.mkdtemp(prefix="codex-relay-test-")).resolve()
         # 긴 상태 디렉토리 회귀 — 유닉스 소켓 시절 108바이트 제한에 걸렸던 경로 길이다
         self.home = self.tmp / ("h" * 100) / "home"
         self.workdir = self.tmp / "wd"
