@@ -12,7 +12,7 @@ from typing import Any
 
 from .server import endpoint_path, state_home
 
-USAGE = """usage: codex-relay start <read|write> <workdir> <brief-file> <out-dir>
+USAGE = """usage: codex-relay start <read|write|render> <workdir> <brief-file> <out-dir>
        codex-relay wait <id>
        codex-relay send <id> <msg-file>
        codex-relay stop <id>
@@ -36,8 +36,8 @@ def build_request(argv: list[str]) -> dict[str, Any]:
     cmd, args = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "start" and len(args) == 4:
         mode, workdir, brief, out = args
-        if mode not in ("read", "write"):
-            raise UsageError(f"mode must be read or write, got {mode!r}")
+        if mode not in ("read", "write", "render"):
+            raise UsageError(f"mode must be read, write or render, got {mode!r}")
         if not Path(workdir).is_dir():
             raise UsageError(f"workdir not a directory: {workdir}")
         _read_nonempty(brief, "brief file")

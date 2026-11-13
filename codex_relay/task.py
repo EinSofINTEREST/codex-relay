@@ -18,7 +18,9 @@ LOST = "lost"
 TIMEOUT = "timeout"
 STOPPED = "stopped"
 STATUSES = (RUNNING, QUESTION, COMPLETED, NO_RESULT, FAILED, LOST, TIMEOUT, STOPPED)
-SANDBOX = {"read": "read-only", "write": "workspace-write"}
+SANDBOX = {"read": "read-only", "write": "workspace-write", "render": "workspace-write"}
+# render 는 write 와 같은 쓰기 범위에 네트워크만 더한다 (headless 브라우저 렌더 확인용)
+NETWORK_MODES = frozenset({"render"})
 # wait 종료 코드 — codex-run.sh 계약 (0 · 3 · 4 · 124) 에 질문 5 · 중단 6 을 더한다
 EXIT_CODES = {COMPLETED: 0, NO_RESULT: 4, QUESTION: 5, FAILED: 3, LOST: 3, TIMEOUT: 124, STOPPED: 6}
 PERSISTED = (

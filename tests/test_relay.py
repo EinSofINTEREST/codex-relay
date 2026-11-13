@@ -134,9 +134,9 @@ class RelayTest(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         return str(path)
 
-    def start(self, brief: str, out: str = "out", env: dict[str, str] | None = None) -> tuple[str, Path]:
+    def start(self, brief: str, out: str = "out", env: dict[str, str] | None = None, mode: str = "read") -> tuple[str, Path]:
         rc, so, se = self.run_cli(
-            "start", "read", str(self.workdir), self.write(out + ".md", brief), str(self.tmp / out), env=env
+            "start", mode, str(self.workdir), self.write(out + ".md", brief), str(self.tmp / out), env=env
         )
         self.assertEqual(rc, 0, se)
         return so.strip(), self.tmp / out
@@ -318,6 +318,30 @@ class RelayTest(unittest.TestCase):
         pid = int((self.home / "daemon.pid").read_text(encoding="utf-8"))
         _kill(pid)
         self.assertTrue(_wait_dead(pid))
+
+    def thread_config(self, mode: str, out: str, resume: bool = False) -> dict[str, Any]:
+        tid, path = self.start("hello", out=out, mode=mode)
+        self.wait(tid, 0)
+        if resume:
+            self.kill_daemon()
+            self.send(tid, "again")  # 새 데몬이 색인에서 복구해 resume 한다
+            self.wait(tid, 0)
+        method = "thread/resume" if resume else "thread/start"
+        params = next(e for e in self.events(path) if e.get("method") == method)["params"]
+        self.assertEqual(params["sandbox"], "workspace-write" if mode != "read" else "read-only")
+        return params["config"]
+
+    def test_render_mode_enables_network(self) -> None:
+        self.assertTrue(self.thread_config("render", "r1")["sandbox_workspace_write.network_access"])
+
+    def test_render_mode_network_survives_daemon_restart(self) -> None:
+        self.assertTrue(self.thread_config("render", "r2", resume=True)["sandbox_workspace_write.network_access"])
+
+    def test_read_and_write_modes_have_no_network_key(self) -> None:
+        for mode in ("read", "write"):
+            for resume in (False, True):
+                config = self.thread_config(mode, f"n-{mode}-{int(resume)}", resume=resume)
+                self.assertNotIn("sandbox_workspace_write.network_access", config)
 
     def test_tampered_copy_does_not_widen_sandbox(self) -> None:
         tid, out = self.start("SLOW")
