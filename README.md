@@ -19,7 +19,7 @@ claude plugin install codex-relay@codex-relay
 ## 명령
 
 ```text
-codex-relay start <read|write> <workdir> <brief-file> <out-dir>   작업 시작, 작업 id 출력 후 즉시 반환
+codex-relay start <read|write|render> <workdir> <brief-file> <out-dir>   작업 시작, 작업 id 출력 후 즉시 반환
 codex-relay wait <id>                                              질문 · 완료 · 실패까지 대기
 codex-relay send <id> <msg-file>                                   답 · 다음 turn · 추가 지시
 codex-relay stop <id>                                              중단
@@ -28,6 +28,14 @@ codex-relay status [id]                                            조회
 
 `wait` 종료 코드: 0 완료 · 2 인자 오류 · 3 turn 실패 · 4 결과 블록 없음 · 5 질문 대기 · 6 중단 · 124 시간 초과.
 `<out-dir>` 은 작업마다 새로 써야 한다. 보고는 `<out-dir>/last.md` 에 남는다.
+
+## 모드 · 샌드박스
+
+| 모드 | 쓰기 범위 |
+|---|---|
+| `read` | 읽기 전용 샌드박스 |
+| `write` | `<workdir>` 와 `/tmp` 아래만 |
+| `render` | `write` 와 같고 네트워크 허용 — UI 렌더 확인용 (headless 브라우저 · 로컬 서버). 외부 접속 금지는 브리프로 제한한다 |
 
 ## 환경 변수
 

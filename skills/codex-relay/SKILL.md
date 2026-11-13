@@ -16,7 +16,7 @@ description: Codex 에 작업을 위임하거나, 위임한 작업에 답 · 피
 ## 절차
 
 1. 브리프를 파일로 쓴다. 비어 있으면 거부된다.
-2. `codex-relay start <read|write> <workdir> <brief-file> <out-dir>` — 작업 id 를 출력하고 바로 돌아온다. `<out-dir>` 은 **작업마다 새로** (이미 쓴 out-dir 이면 종료 코드 2).
+2. `codex-relay start <read|write|render> <workdir> <brief-file> <out-dir>` — 작업 id 를 출력하고 바로 돌아온다. `<out-dir>` 은 **작업마다 새로** (이미 쓴 out-dir 이면 종료 코드 2).
 3. `codex-relay wait <id>` 를 **반드시 Bash `run_in_background` 로** 띄운다. `&` 로 띄우면 완료 알림이 오지 않는다. 질문 · 완료 · 실패 때 끝난다.
 4. 종료 코드대로 처리한다 (아래 표). 요약은 wait stdout, 보고 본문은 `<out-dir>/last.md`.
 5. 질문 (코드 5) 이면 답을 파일로 써 `send` 하고 `wait` 를 다시 백그라운드로 띄운다.
@@ -53,6 +53,7 @@ CLI 자체 실패 (데몬 연결 불가 등) 는 종료 코드 3 이고 stderr �
 |---|---|
 | `read` | 읽기 전용 샌드박스 |
 | `write` | `<workdir>` 와 `/tmp` 아래만 |
+| `render` | `write` 와 같고 네트워크 허용 — UI 렌더 확인용 (headless 브라우저 · 로컬 서버). 외부 접속 금지는 브리프로 제한한다 |
 
 중계기가 샌드박스를 고정하고 승인 요청 (`approvalPolicy never`) 은 거부한다. 권한이 더 필요하면 Codex 가 `상태: 차단` 으로 보고한다 — 범위를 다시 정해 새 작업으로 보낸다.
 

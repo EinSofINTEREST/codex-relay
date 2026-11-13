@@ -18,6 +18,7 @@ from .task import (
     COMPLETED,
     FAILED,
     LOST,
+    NETWORK_MODES,
     NO_RESULT,
     RUNNING,
     SANDBOX,
@@ -177,6 +178,8 @@ class Relay:
 
     def thread_params(self, task: Task) -> dict[str, Any]:
         config: dict[str, Any] = {"features.default_mode_request_user_input": True}
+        if task.mode in NETWORK_MODES:
+            config["sandbox_workspace_write.network_access"] = True
         if task.effort:
             config["model_reasoning_effort"] = task.effort
         return {"cwd": task.workdir, "sandbox": task.sandbox, "approvalPolicy": "never", "config": config}
