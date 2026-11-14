@@ -43,6 +43,7 @@ codex-relay status [id]                                            조회
 |---|---|
 | `CODEX_TIMEOUT` | turn 단위 실행 제한 (초, 질문 대기 제외, 기본 1800) |
 | `CODEX_EFFORT` | 추론 강도 |
+| `CODEX_WEB_SEARCH` | 웹 검색 `disabled` / `cached` / `live` (기본 미지정). 모델 측 검색 도구 — 샌드박스 네트워크와 무관, read 모드에서도 동작 |
 | `CODEX_RELAY_IDLE` | 데몬 idle 종료 (초) |
 | `CODEX_RELAY_GRACE` | 종료 유예 (초) |
 | `CODEX_RELAY_READ_TIMEOUT` | app-server 읽기 제한 (초) |

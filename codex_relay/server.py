@@ -7,6 +7,7 @@ import secrets
 import shlex
 import socketserver
 import threading
+import tomllib
 from pathlib import Path
 from typing import IO, Any
 
@@ -35,11 +36,17 @@ def endpoint_path(home: Path) -> Path:
     return home / ENDPOINT_NAME
 
 
+# 버전의 단일 출처는 pyproject.toml — CLI 와 데몬이 같은 값을 읽어 플러그인 갱신 뒤 어긋남을 알아본다
+VERSION: str = tomllib.loads((Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8"))[
+    "project"
+]["version"]
+
+
 def _write_endpoint(path: Path, port: int, token: str) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.unlink(missing_ok=True)  # O_CREAT 는 이미 있는 파일의 권한을 바꾸지 않는다
     with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w", encoding="utf-8") as f:
-        json.dump({"port": port, "token": token}, f)
+        json.dump({"port": port, "token": token, "version": VERSION}, f)
     os.replace(tmp, path)
 
 

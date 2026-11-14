@@ -65,6 +65,7 @@ CLI 자체 실패 (데몬 연결 불가 등) 는 종료 코드 3 이고 stderr �
 |---|---|---|
 | `CODEX_TIMEOUT` | turn 단위 실행 제한 (초, 양의 정수, 질문 대기 제외) | 1800 |
 | `CODEX_EFFORT` | 추론 강도 (`start` 시점에 읽음) | 미지정 |
+| `CODEX_WEB_SEARCH` | 웹 검색 `disabled` · `cached` · `live` (`start` 시점에 읽음, 그 밖의 값은 코드 2). 모델 측 검색 도구 — 샌드박스 네트워크와 무관, `read` 모드에서도 동작 | 미지정 (config 에 넣지 않음) |
 | `CODEX_RELAY_IDLE` | 데몬 idle 종료 (초) | 1800 |
 | `CODEX_RELAY_GRACE` | 시간 초과 interrupt 뒤 turn 종료를 기다리는 시간 (초). 넘으면 app-server 재시작 | 15 |
 | `CODEX_RELAY_READ_TIMEOUT` | 데몬이 클라이언트 요청 한 줄을 기다리는 시간 (초) | 10 |

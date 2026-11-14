@@ -1,6 +1,6 @@
 {
   "name": "codex-relay",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Codex app-server 를 상주 데몬으로 붙잡아 질문 · 이어 보내기를 지원하는 대화형 중계기 (codex-relay CLI)",
   "author": { "name": "EinsofINTEREST" }
 }

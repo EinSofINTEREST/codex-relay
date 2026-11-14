@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .server import endpoint_path, state_home
+from .server import VERSION, endpoint_path, state_home
 
 USAGE = """usage: codex-relay start <read|write|render> <workdir> <brief-file> <out-dir>
        codex-relay wait <id>
@@ -19,6 +19,8 @@ USAGE = """usage: codex-relay start <read|write|render> <workdir> <brief-file> <
        codex-relay status [id]"""
 CONNECT_TRIES = 50  # 0.2s 간격 — 데몬 기동을 최대 약 10초 기다린다
 EOF_RETRIES = 3
+WEB_SEARCH_VALUES = ("disabled", "cached", "live")
+WEB_SEARCH_MIN_DAEMON = (0, 2, 2)  # 구 데몬은 요청의 web_search 를 조용히 버린다
 
 
 class UsageError(Exception):
@@ -44,6 +46,9 @@ def build_request(argv: list[str]) -> dict[str, Any]:
         raw = os.environ.get("CODEX_TIMEOUT", "1800")
         if not raw.isdigit() or int(raw) == 0:
             raise UsageError("CODEX_TIMEOUT must be positive integer seconds")
+        web_search = os.environ.get("CODEX_WEB_SEARCH")  # 빈 문자열도 지정이다 — 변수가 없을 때만 미지정
+        if web_search is not None and web_search not in WEB_SEARCH_VALUES:
+            raise UsageError("CODEX_WEB_SEARCH must be disabled, cached or live")
         return {
             "cmd": "start",
             "mode": mode,
@@ -52,6 +57,7 @@ def build_request(argv: list[str]) -> dict[str, Any]:
             "out_dir": str(Path(out).resolve()),
             "timeout_s": int(raw),
             "effort": os.environ.get("CODEX_EFFORT") or None,
+            "web_search": web_search,
         }
     if cmd in ("wait", "stop") and len(args) == 1:
         return {"cmd": cmd, "id": args[0]}
@@ -86,18 +92,26 @@ def _spawn_daemon(home: Path) -> subprocess.Popen[bytes]:
         )
 
 
-def _try_connect(home: Path) -> tuple[socket.socket, str] | None:
+def _daemon_too_old(version: object) -> bool:
+    """버전을 읽을 수 없으면 (없음 · 문자열 아님 · 숫자 조각 아님) 구 데몬과 같게 본다."""
+    try:
+        return tuple(map(int, str(version).split("."))) < WEB_SEARCH_MIN_DAEMON if isinstance(version, str) else True
+    except ValueError:
+        return True
+
+
+def _try_connect(home: Path) -> tuple[socket.socket, str, object] | None:
     try:
         ep = json.loads(endpoint_path(home).read_text(encoding="utf-8"))
-        return socket.create_connection(("127.0.0.1", int(ep["port"]))), str(ep["token"])
+        return socket.create_connection(("127.0.0.1", int(ep["port"]))), str(ep["token"]), ep.get("version")
     except (FileNotFoundError, ConnectionRefusedError, PermissionError):
         # 파일 없음 = 데몬 없음, 연결 거부 = 죽은 데몬이 남긴 파일.
         # PermissionError: Windows 에서 데몬이 지우거나 바꾸는 중인 파일을 열면 난다 — 재시도로 넘긴다
         return None
 
 
-def connect(home: Path) -> tuple[socket.socket, str]:
-    """데몬에 붙어 (소켓, 토큰) 을 돌려준다. 데몬이 없으면 띄운다."""
+def connect(home: Path) -> tuple[socket.socket, str, object]:
+    """데몬에 붙어 (소켓, 토큰, 데몬 버전) 을 돌려준다. 버전이 없으면 구 데몬이다. 데몬이 없으면 띄운다."""
     home.mkdir(parents=True, exist_ok=True, mode=0o700)
     proc: subprocess.Popen[bytes] | None = None
     for _ in range(CONNECT_TRIES):
@@ -116,7 +130,16 @@ def request(req: dict[str, Any]) -> dict[str, Any]:
     # wait · status 만 다시 보낸다 — start · send 를 다시 보내면 turn 이 두 번 시작될 수 있다
     tries = EOF_RETRIES if req["cmd"] in ("wait", "status") else 1
     for _ in range(tries):
-        s, token = connect(home)
+        s, token, daemon_version = connect(home)
+        if daemon_version != VERSION:
+            hint = (
+                f"relay daemon version {'unknown' if daemon_version is None else repr(daemon_version)} differs from CLI {VERSION}; "
+                "restart the daemon when no task is running"
+            )
+            if req.get("web_search") and _daemon_too_old(daemon_version):
+                s.close()
+                return {"code": 2, "out": f"{hint}; this daemon would ignore CODEX_WEB_SEARCH"}
+            print(f"codex-relay: {hint}", file=sys.stderr)
         with s:
             s.sendall((json.dumps({**req, "token": token}, ensure_ascii=False) + "\n").encode())
             line = s.makefile("rb").readline()

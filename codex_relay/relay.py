@@ -196,6 +196,8 @@ class Relay:
             config["sandbox_workspace_write.network_access"] = True
         if task.effort:
             config["model_reasoning_effort"] = task.effort
+        if task.web_search:
+            config["web_search"] = task.web_search
         return {"cwd": task.workdir, "sandbox": task.sandbox, "approvalPolicy": "never", "config": config}
 
     def _on_app_exit(self, app: AppServer) -> None:

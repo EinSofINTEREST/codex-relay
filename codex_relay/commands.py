@@ -26,6 +26,7 @@ def start(relay: Relay, req: dict[str, Any]) -> Reply:
         out_dir=str(out),
         timeout_s=int(req["timeout_s"]),
         effort=req.get("effort") or None,
+        web_search=req.get("web_search") or None,
         on_save=relay.save_index,
     )
     brief = Path(task.brief).read_text(encoding="utf-8")
