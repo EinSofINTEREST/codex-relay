@@ -37,6 +37,7 @@ PERSISTED = (
     "codex_version",
     "timeout_s",
     "effort",
+    "web_search",
     "turn_id",
     "result",
     "error",
@@ -83,6 +84,8 @@ class Task:
     timeout_s: int
     effort: str | None
     thread_id: str | None = None
+    # 0.2.1 이 쓴 기록에는 없는 필드 — 기본값 None 으로 읽는다
+    web_search: str | None = None
     status: str = RUNNING
     round: int = 0
     events_line: int = 0

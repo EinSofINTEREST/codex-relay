@@ -97,6 +97,7 @@ class RelayTest(unittest.TestCase):
         }
         self.env.pop("CODEX_TIMEOUT", None)
         self.env.pop("CODEX_EFFORT", None)
+        self.env.pop("CODEX_WEB_SEARCH", None)
 
     def tearDown(self) -> None:
         pidfile = self.home / "daemon.pid"
@@ -414,6 +415,81 @@ class RelayTest(unittest.TestCase):
             for resume in (False, True):
                 config = self.thread_config(mode, f"n-{mode}-{int(resume)}", resume=resume)
                 self.assertNotIn("sandbox_workspace_write.network_access", config)
+
+    def test_web_search_in_start_and_resume_config(self) -> None:
+        self.env["CODEX_WEB_SEARCH"] = "live"
+        self.assertEqual(self.thread_config("read", "w1")["web_search"], "live")
+        self.assertEqual(self.thread_config("read", "w2", resume=True)["web_search"], "live")
+
+    def test_web_search_unset_has_no_key(self) -> None:
+        for resume in (False, True):
+            self.assertNotIn("web_search", self.thread_config("read", f"nw{int(resume)}", resume=resume))
+
+    def test_web_search_invalid_value_rejected(self) -> None:
+        env = {**self.env, "CODEX_WEB_SEARCH": "yes"}
+        rc, _, se = self.run_cli("start", "read", str(self.workdir), self.write("b.md", "x"), str(self.tmp / "o"), env=env)
+        self.assertEqual(rc, 2, se)
+        self.assertIn("CODEX_WEB_SEARCH", se)
+
+    def test_web_search_empty_value_rejected(self) -> None:
+        env = {**self.env, "CODEX_WEB_SEARCH": ""}
+        rc, _, se = self.run_cli("start", "read", str(self.workdir), self.write("b.md", "x"), str(self.tmp / "o"), env=env)
+        self.assertEqual(rc, 2, se)
+
+    def test_unparseable_daemon_version_is_unverified(self) -> None:
+        for bad in ("0.2.x", "0.3.0rc1", "", 2):
+            with self.subTest(version=bad):
+                self._set_daemon_version(bad)
+                rc, _, se = self.run_cli("status")
+                self.assertEqual(rc, 0, se)
+                self.assertIn(f"relay daemon version {bad!r} differs", se)
+                env = {**self.env, "CODEX_WEB_SEARCH": "live"}
+                rc, _, se = self.run_cli("start", "read", str(self.workdir), self.write("b.md", "x"), str(self.tmp / "o"), env=env)
+                self.assertEqual(rc, 2, se)
+
+    def _set_daemon_version(self, version: object) -> None:
+        self.assertEqual(self.run_cli("status")[0], 0)  # 데몬을 띄운다
+        path = self.home / "endpoint.json"
+        ep = json.loads(path.read_text(encoding="utf-8"))
+        ep.pop("version", None)
+        if version is not None:
+            ep["version"] = version
+        path.write_text(json.dumps(ep), encoding="utf-8")
+
+    def test_old_daemon_rejects_web_search_request(self) -> None:
+        self._set_daemon_version(None)  # 0.2.1 데몬 흉내 — endpoint 에 버전이 없다
+        env = {**self.env, "CODEX_WEB_SEARCH": "live"}
+        rc, so, se = self.run_cli("start", "read", str(self.workdir), self.write("b.md", "x"), str(self.tmp / "o"), env=env)
+        self.assertEqual(rc, 2, so + se)
+        self.assertIn("restart the daemon when no task is running", se)
+        self.assertFalse((self.tmp / "o").exists())  # 데몬에 요청이 가지 않았다
+
+    def test_daemon_version_mismatch_warns_but_proceeds(self) -> None:
+        self._set_daemon_version("0.2.2.1")
+        tid, _ = self.start("hello")
+        self.wait(tid, 0)
+        rc, _, se = self.run_cli("status")
+        self.assertEqual(rc, 0)
+        self.assertIn("relay daemon version '0.2.2.1' differs from CLI", se)
+
+    def test_same_daemon_version_no_warning(self) -> None:
+        self.assertEqual(self.run_cli("status")[0], 0)
+        rc, _, se = self.run_cli("status")
+        self.assertEqual((rc, se), (0, ""))
+
+    def test_index_record_without_web_search_loads(self) -> None:
+        # 0.2.1 이 쓴 기록 — web_search 필드가 없어도 정상 작업이다
+        tid, _ = self.start("hello")
+        self.wait(tid, 0)
+        self.kill_daemon()
+        path = self.home / "tasks.v2.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        del data[tid]["web_search"]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        self.send(tid, "again")
+        self.wait(tid, 0)
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(saved[tid]["web_search"], None)
 
     def test_tampered_copy_does_not_widen_sandbox(self) -> None:
         tid, out = self.start("SLOW")
