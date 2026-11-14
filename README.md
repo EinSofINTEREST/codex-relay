@@ -53,6 +53,8 @@ codex-relay status [id]                                            조회
 
 기본 `~/.local/state/codex-relay` (플러그인 변수는 Bash 도구 환경에 없어 고정). Codex 대화는 `~/.codex/sessions` 에 남으므로 브리프 · 메시지에 비밀을 넣지 않는다.
 
+작업 색인 원본은 `tasks.v2.json` 이다. 0.2.0 이하가 쓰던 `tasks.json` 은 `tasks.v2.json` 이 없을 때 한 번 가져오고 지우거나 고치지 않는다. 이 버전이 모르는 mode · 필드의 기록 (다른 버전이 쓴 작업) 은 원문 그대로 보존하고, 그 id 를 `send` · `wait` · `status` 로 부르면 그 버전으로 다루라는 오류 (코드 2) 를 낸다. 전체 `status` 목록에는 나오지 않는다.
+
 ## 테스트
 
 ```bash

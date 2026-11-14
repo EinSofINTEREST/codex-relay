@@ -289,6 +289,78 @@ class RelayTest(unittest.TestCase):
         rc, so, _ = self.run_cli("status")
         self.assertEqual((rc, len(so.splitlines())), (0, 2))
 
+    def _foreign_records(self) -> dict[str, dict[str, Any]]:
+        """다른 버전이 쓴 색인 기록 — 모르는 mode 하나, 아는 mode 에 모르는 필드 하나."""
+        base = {"workdir": str(self.workdir), "brief": "/nonexistent/b.md", "status": "failed", "round": 1,
+                "events_line": 0, "codex_version": None, "timeout_s": 60, "effort": None, "turn_id": None,
+                "result": None, "error": "x", "question": None}
+        return {
+            "t-future": {**base, "id": "t-future", "thread_id": "th-f", "mode": "future-mode",
+                         "out_dir": str(self.tmp / "of"), "field_from_newer_version": 1},
+            "t-extra": {**base, "id": "t-extra", "thread_id": "th-e", "mode": "read",
+                        "out_dir": str(self.tmp / "oe"), "field_from_newer_version": [1, 2]},
+            # 생성자는 받지만 저장 스키마 밖인 내부 필드 — 일반 작업으로 들이면 저장 때 사라진다
+            "t-internal": {**base, "id": "t-internal", "thread_id": "th-i", "mode": "read",
+                           "out_dir": str(self.tmp / "oi"), "elapsed": 123.5},
+        }
+
+    def _assert_foreign_refused(self, foreign: dict[str, dict[str, Any]]) -> None:
+        for tid, rec in foreign.items():
+            for args in (("send", tid, self.write("m.txt", "again")), ("wait", tid), ("status", tid)):
+                rc, so, se = self.run_cli(*args)
+                self.assertEqual(rc, 2, so + se)
+                self.assertNotIn("unknown task id", so + se)
+                self.assertIn(f"recorded by another codex-relay version (mode {rec['mode']!r})", so + se)
+        rc, so, se = self.run_cli("status")
+        self.assertEqual(rc, 0, se)
+        self.assertFalse([t for t in foreign if t in so], so)
+
+    def test_foreign_index_records_survive_save(self) -> None:
+        # 다른 버전 데몬이 쓴 기록이 이 데몬의 색인 저장으로 지워지면 안 된다 (#5)
+        foreign = self._foreign_records()
+        self.home.mkdir(parents=True)
+        (self.home / "tasks.v2.json").write_text(json.dumps(foreign), encoding="utf-8")
+        tid, _ = self.start("hello")
+        self.wait(tid, 0)
+        index = json.loads((self.home / "tasks.v2.json").read_text(encoding="utf-8"))
+        self.assertEqual({k: index.get(k) for k in foreign}, foreign)
+        self.assertEqual(index[tid]["status"], COMPLETED)
+        self._assert_foreign_refused(foreign)
+
+    def test_legacy_tasks_json_imported_and_left_untouched(self) -> None:
+        old, _ = self.start("hello")
+        self.wait(old, 0)
+        _kill(int((self.home / "daemon.pid").read_text(encoding="utf-8")))
+        legacy = json.loads((self.home / "tasks.v2.json").read_text(encoding="utf-8"))
+        foreign = self._foreign_records()
+        # 0.2.0 이하가 남긴 상태 — 구 색인만 있다
+        (self.home / "tasks.v2.json").unlink()
+        raw = json.dumps({**legacy, **foreign})
+        (self.home / "tasks.json").write_text(raw, encoding="utf-8")
+        self.send(old, "again")  # 이 호출이 데몬을 다시 띄운다
+        self.wait(old, 0)
+        index = json.loads((self.home / "tasks.v2.json").read_text(encoding="utf-8"))
+        self.assertEqual(index[old]["round"], 2)
+        self.assertEqual({k: index.get(k) for k in foreign}, foreign)
+        self.assertEqual((self.home / "tasks.json").read_text(encoding="utf-8"), raw)
+        self._assert_foreign_refused(foreign)
+
+    def test_legacy_import_written_without_state_change(self) -> None:
+        # 가져온 뒤 저장 없이 내려가면, 그 사이 구 데몬이 tasks.json 을 다시 써 기록이 사라진다 (#5)
+        old, _ = self.start("hello", mode="render")
+        self.wait(old, 0)
+        _kill(int((self.home / "daemon.pid").read_text(encoding="utf-8")))
+        v2 = self.home / "tasks.v2.json"
+        raw = v2.read_text(encoding="utf-8")
+        v2.rename(self.home / "tasks.json")
+        self.assertEqual(self.run_cli("status")[0], 0)  # 데몬을 띄워 가져오기만 한다
+        self.assertEqual(json.loads(v2.read_text(encoding="utf-8")), json.loads(raw))
+        _kill(int((self.home / "daemon.pid").read_text(encoding="utf-8")))
+        (self.home / "tasks.json").unlink()  # 구 데몬이 render 기록을 지운 상황
+        rc, so, se = self.run_cli("status", old)
+        self.assertEqual(rc, 0, so + se)
+        self.assertIn(f"{old} completed", so)
+
     def test_missing_codex_binary_fails_fast(self) -> None:
         env = {**self.env, "CODEX_RELAY_CODEX_BIN": str(self.tmp / "no-such-codex")}
         rc, so, se = self.run_cli(
@@ -296,7 +368,7 @@ class RelayTest(unittest.TestCase):
         )
         self.assertEqual(rc, 3, so + se)
         self.assertIn("cannot start app-server", se)
-        task_id = json.loads((self.home / "tasks.json").read_text(encoding="utf-8")).popitem()[0]
+        task_id = json.loads((self.home / "tasks.v2.json").read_text(encoding="utf-8")).popitem()[0]
         self.assertIn("start failed: cannot start app-server", self.wait(task_id, 3))
 
     def test_question_wait_excluded_from_timeout(self) -> None:

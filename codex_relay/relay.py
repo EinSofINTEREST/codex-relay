@@ -20,6 +20,7 @@ from .task import (
     LOST,
     NETWORK_MODES,
     NO_RESULT,
+    PERSISTED,
     RUNNING,
     SANDBOX,
     STATUSES,
@@ -38,6 +39,7 @@ class Relay:
         self.home, self.codex_argv, self.idle_s, self.grace_s = home, codex_argv, idle_s, grace_s
         self.cv = threading.Condition()
         self.tasks: dict[str, Task] = {}
+        self.foreign: dict[str, dict[str, Any]] = {}  # 이 버전이 모르는 색인 기록 원문 — 기동 때만 채운다
         self.by_thread: dict[str, Task] = {}
         self.loaded: set[str] = set()  # 지금 app-server 에 올라간 thread — 없으면 thread/resume
         self.app: AppServer | None = None
@@ -52,21 +54,29 @@ class Relay:
 
     # ---- 색인 (원본) · 재시작 복구
     def _index_path(self) -> Path:
-        return self.home / "tasks.json"
+        # 0.1.0 · 0.2.0 은 tasks.json 을 통째로 다시 쓰며 모르는 기록을 지운다 — 그 데몬과 파일을 나눈다
+        return self.home / "tasks.v2.json"
 
     def _load_index(self) -> None:
-        if not self._index_path().exists():
-            return
-        for tid, rec in json.loads(self._index_path().read_text(encoding="utf-8")).items():
+        path = self._index_path()
+        if not path.exists():
+            path = self.home / "tasks.json"  # 구 색인은 가져오기만 하고 지우거나 고치지 않는다
+            if not path.exists():
+                return
+        for tid, rec in json.loads(path.read_text(encoding="utf-8")).items():
+            raw = dict(rec)
             mode = rec.pop("mode", None)
-            if mode not in SANDBOX:
-                log.warning("skipping task %s: invalid mode %r in index", tid, mode)
+            if mode not in SANDBOX or not rec.keys() <= set(PERSISTED):
+                # 저장 스키마 밖의 키는 생성자가 받는 내부 필드여도 저장 때 사라진다 — 생성자 예외에 기대지 않는다
+                log.warning("keeping foreign task %s untouched: unknown mode %r or fields in index", tid, mode)
+                self.foreign[tid] = raw
                 continue
             try:
                 # sandbox 는 저장값을 믿지 않고 mode 에서 다시 계산한다
                 task = Task(**rec, mode=mode, sandbox=SANDBOX[mode])
             except TypeError as e:
-                log.warning("skipping task %s: bad index record: %s", tid, e)
+                log.warning("keeping foreign task %s untouched: unknown index record: %s", tid, e)
+                self.foreign[tid] = raw
                 continue
             task.on_save = self.save_index
             self.tasks[tid] = task
@@ -77,9 +87,13 @@ class Relay:
                 if task.status not in STATUSES or task.status == RUNNING or task.input_pending():
                     # turn 은 이전 app-server 프로세스와 함께 죽었다
                     self.end_safe(task, LOST, "relay daemon restarted; turn lost")
+            if path != self._index_path():
+                # 가져오기를 바로 끝낸다 — v2 없이 내려가면 그 사이 구 데몬이 tasks.json 에서 지운 기록을 다시 가져온다
+                self.save_index()
 
     def save_index(self) -> None:
-        data = {tid: t.record() for tid, t in self.tasks.items()}
+        # 다른 버전이 쓴 기록은 실행 · 신뢰하지 않고 원문 그대로 다시 쓴다 — 그 버전이 이어서 다룰 수 있게
+        data = {**self.foreign, **{tid: t.record() for tid, t in self.tasks.items()}}
         tmp = self._index_path().with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         tmp.replace(self._index_path())
