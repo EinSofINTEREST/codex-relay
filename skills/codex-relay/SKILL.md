@@ -74,6 +74,7 @@ CLI 자체 실패 (데몬 연결 불가 등) 는 종료 코드 3 이고 stderr �
 - `CODEX_*` 는 `start` 를 부르는 쪽 환경에서 읽어 작업에 실린다. `CODEX_RELAY_*` 는 데몬 기동 환경이 정한다 — 이미 떠 있는 데몬에는 적용되지 않는다.
 - ChatGPT 로그인이면 모델을 고를 수 없다 (`-m` 거부). 기본 모델을 쓰고 강도만 `CODEX_EFFORT` 로 조정한다.
 - 데몬은 루프백 TCP + 토큰 (`endpoint.json`) 으로 통신한다.
+- 작업 색인 원본은 상태 디렉토리의 `tasks.v2.json` 이다 (구 `tasks.json` 은 처음 한 번 가져오기만 한다). 다른 codex-relay 버전이 기록한 작업 id 는 코드 2 와 "recorded by another codex-relay version" 으로 거절된다 — 그 버전으로 다룬다.
 - Codex 대화는 `~/.codex/sessions` 에 남는다 — **브리프 · `send` 메시지에 비밀을 넣지 않는다.**
 
 ## 신뢰

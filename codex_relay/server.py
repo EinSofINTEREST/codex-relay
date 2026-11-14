@@ -128,11 +128,11 @@ def dispatch(relay: Relay, req: dict[str, Any]) -> tuple[int, str]:
         return commands.start(relay, req)
     if cmd == "status":
         if req.get("id") and relay.get(req["id"]) is None:
-            return 2, f"unknown task id: {req['id']}"
+            return _no_task(relay, str(req["id"]))
         return commands.status(relay, req.get("id"))
     task = relay.get(str(req.get("id")))
     if task is None:
-        return 2, f"unknown task id: {req.get('id')}"
+        return _no_task(relay, str(req.get("id")))
     if cmd == "wait":
         return commands.wait(relay, task)
     if cmd == "send":
@@ -140,6 +140,13 @@ def dispatch(relay: Relay, req: dict[str, Any]) -> tuple[int, str]:
     if cmd == "stop":
         return commands.stop(relay, task)
     return 2, f"unknown command: {cmd}"
+
+
+def _no_task(relay: Relay, tid: str) -> tuple[int, str]:
+    rec = relay.foreign.get(tid)  # foreign 은 기동 뒤 바뀌지 않아 cv 없이 읽는다
+    if rec is None:
+        return 2, f"unknown task id: {tid}"
+    return 2, f"task {tid} was recorded by another codex-relay version (mode {rec.get('mode')!r}); use that version"
 
 
 def _positive_env(name: str, default: float) -> float:
